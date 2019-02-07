@@ -1,0 +1,414 @@
+\documentclass[a4paper,11pt]{refart}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc} % LY1 also works
+
+%% Font settings suggested by fbb documentation.
+\usepackage{textcomp} % to get the right copyright, etc.
+\usepackage[lining,tabular]{fbb} % so math uses tabular lining figures
+\usepackage[scaled=.95,type1]{cabin} % sans serif in style of Gill Sans
+\usepackage[varqu,varl]{zi4}% inconsolata typewriter
+\useosf % change normal text to use proportional oldstyle figures
+%\usetosf would provide tabular oldstyle figures in text
+
+\settextfraction{1}
+
+
+\usepackage{microtype}
+
+\usepackage{graphicx}
+\usepackage{enumitem}
+\setlist{leftmargin=*}
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily,frame=single,xleftmargin=1em,xrightmargin=1em}
+\usepackage[os=win]{menukeys}
+\renewmenumacro{\keys}[+]{shadowedroundedkeys}
+\usepackage{framed}
+\usepackage{etoolbox}
+\AtBeginEnvironment{leftbar}{\sffamily\small}
+
+\usetikzlibrary{chains,arrows,shapes,positioning}
+\usepackage{hyperref}
+
+\renewcommand\abstractname{Introduction}
+
+\usepackage{multicol}
+\setlength\columnsep{20pt}
+
+\usepackage[margin=0.7in]{geometry}
+
+
+
+
+\title{Fluam User Guide}
+\author{Raul P. Pelaez}
+\date{\url{https://github.com/RaulPPelaez/fluam}\\2019}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Fluam is a code for fluctuating hydrodynamics with immersed structures based on the immersed boundary method written by Florencio Balboa Usabiaga (\url{https://github.com/fbusabiaga}). It offers fluid solvers for the compressible and incompressible Navier-Stokes equations. This document provices a primer on the capabilities of said program, as well as a guide on how to use it.
+\end{abstract}
+
+\tableofcontents
+\clearpage
+
+\section{Quick Guide to Workflow} \label{quickguide}
+\subsection{Compilation}
+Fluam uses a \textbf{Makefile} for compilation, it is located in \emph{bin/Makefile}. In order to compile you will probably need to tweak some variables to adapt it to you system:
+
+Fluam needs a working \emph{CUDA} enviroment to compile. Namely it needs NVCC, cuFFT and cuRAND. Besides it needs a working c++ compiler (the one used for the CUDA instalation will suffice). Additionally fluam might complain about missing fftw3 or libgfortran, however they are not needed for compilation so you can safely remove them from the line containing the ``LIBRARIES'' variable in \emph{bin/MakefileHeader}.
+
+Fluam will look for the CUDA enviroment in \emph{/usr/local/cuda} and will expect \emph{nvcc} to be in the \emph{PATH} enviroment variable.
+
+Additionally you will have to specify a particular \emph{CUDA} arquitecture in which to compile fluam, this should be done by modifying the ``NVCCFLAGS'' variable in \emph{bin/MakefileHeader} (changing \emph{-arch=sm\_xx} for your particular arquitecture).
+
+
+Once all customizations are in place, just run ``make" in the \emph{bin} folder to compile.
+
+\subsection{Execution}
+
+Fluam will read the parameters for a simulation from a file called ``data.main'' which must be present in the same folder as the binary.
+
+See section \ref{datamain} for a complete description of the ``data.main'' format.
+
+
+\section{The data.main format} \label{datamain}
+
+
+
+
+
+\begin{itemize}
+\item An example data.main file:
+\begin{lstlisting}
+
+#This is a comment
+stokesLimit
+particles		1
+cutoff                  1
+maxNumberPartInCellNonBonded    20
+maxNumberPartInCell     	20
+
+celldimension 32 32 32
+cells 32 32 32
+
+densfluid               1
+shearviscosity          1.0
+temperature             1.0
+
+initfluid 1
+loadparticles		1
+coordinates inipos
+
+numstepsRelaxation	0
+numsteps                1000000
+samplefreq              1000
+savefreq		0
+
+dt			0.01
+outputname		run
+\end{lstlisting}
+\end{itemize}
+The \emph{data.main} file consists of a series of lines with an ``[option] [arguments]'' format. An option might have several arguments which will be separated by spaces. Some options might have no arguments.
+
+A scheme option must always be present to select the fluam solver (only one must be present). The scheme will change the Navier-Stokes regime at which the simulation will be performed. This option also might change which of the other parameters are mandatory/optional or used/not used. For a list of all available schemes and the parameters involved see \ref{sec:schemes}
+
+Here is a list of all available options with a comma separated list of possible arguments, [X] represents any real number, [N] represents any integer.
+\begin{itemize}
+  \begin{multicols}{2}
+
+\item \textbf{particles}: 0,1
+  
+  Determines if particles will be present or not in the simulation. If ``0'' is selected then the following parameters are ignored when present: \emph{numberparticles, loadparticles, coordinates, bondedForces, threeBondedForces, colors, mass}.
+  If set to ``1'' then a way for fluam to set an initial configuration must be provided (via \emph{loadparticles} or \emph{numberparticles}).
+
+
+\item \textbf{colors}: 0,1
+
+  If present or set to ``1'' fluam will expect the \emph{coordinates} file to have a fourth column containing the color/type of each particle. This will affect how the LJ potential will behave with each pair of particles according to the ``LJ.in'' file.
+  
+\item \textbf{loadparticles}: 0,1
+
+  If not present or set to ``0'' the number of particles given by the \emph{numberparticles} option will be placed inside the simulation box in a cubic lattice. The following options will be ignored in this case: coordinates, colors.
+  If set to ``1'' initial particle positions will be read from the file given in the \emph{coordinates} option. The \emph{numberparticles} option will be ignored in this case.
+  
+\item \textbf{coordinates}: fileName
+
+  The file containing the initial distribution of particles, ignored if ``loadparticles'' and/or ``particles'' are set to ``0''. This file must have the following format:
+  \begin{lstlisting}
+    numberParticles
+    x y z [color]
+    .
+    .
+    .
+  \end{lstlisting}  
+  The first line should contain the number of particles and the rest of the lines should contain the coordinates of each particle with an optional fourth column that must be present if the option \emph{colors} is set to ``1'' containing the color of each particle.
+
+\item \textbf{velocities}: fileName
+
+  Similar to \emph{coordinates} stores the initial velocities of the particles.
+  
+\item \textbf{cutoff}: [X]
+
+  Maximum interaction distance between particles. Even when \emph{particles} is set to ``0'' this option controls the size of the grid for the neighbour list as cutoff/boxSize and must be present.
+
+\item \textbf{maxNumberPartInCellNonBonded}: [N]
+
+  The neighbour list in fluam involves partitioning the simulation box in small boxes of size ~cutoff, the internal data structures fluam uses for this involve setting a maximum number of particles that can be at any point in time in a certain sub box. This option is this number, if at some point in time more than [N] particles are in a given cell fluam will crash with an error code.
+
+\item \textbf{maxNumberPartInCell}: [N]
+
+  Similar to the limitation introduced in \emph{maxNumberPartInCellNonBonded}, the Navier-Stokes spatial discretization also has a maximum number of particles that can be in a certain sub box (cell) at any given time. In this case the size of these sub boxes is related to the hydrodynamic radius of the particles and is given by \emph{cells/celldimension}.
+
+\item \textbf{celldimension}: [X] [X] [X]
+
+  Size of the simulation box in the three directions.
+
+\item \textbf{cells}: [N] [N] [N]
+
+  Fluam's spatial discretization of the Navier-Stokes equations involve partitioning the simulation box such that the hydrodynamic radius of a particle in the system is given by $R_h \sim0.91\emph{celldimension/cells}$. This option forces fluam to use a certain number of cells in each direction (note that this option must always be present).
+
+\item \textbf{dt}: [X]
+
+  Time step size for the temporal discretization.
+
+\item \textbf{densfluid}: [X]
+
+  Flud density.
+  
+\item \textbf{shearviscosity}: [X]
+
+  Shear viscosity of the fluid.
+
+\item \textbf{temperature}: [X]
+  Temperature of the fluid.
+
+\item \textbf{initfluid}: 0, 1
+
+  Fluid velocity is initialized according with the \emph{backgroundvelocity} option, in the case of \emph{initfluid} being ``1'' the fluid velocity is also initialized with random fluctuations according to \emph{temperature}, \emph{shearviscosity} and \emph{densfluid}.
+
+\item \textbf{backgroundvelocity}: [X] [X] [X]
+
+  If present, this option will make the fluid start with a certain constant background velocity, see \emph{initfluid}.
+
+\item \textbf{numsteps}: [N]
+
+  Number of simulation steps to perform.
+
+\item \textbf{numstepsRelaxation}: [N]
+
+  Number of relaxation steps to perform. Relaxation steps are performed before the simulation and nothing is stored during these steps.
+
+\item \textbf{samplefreq}: [N]
+
+  Simulation state (only particle information) will be saved to disk every \emph{samplefreq} steps.
+
+\item \textbf{savefreq}: [N]
+
+  Simulation state, including fluid state, will be saved every savefreq. Note that savefreq must be a multiple of \emph{samplefreq} and always be equal or lower than it.
+  
+\item \textbf{outputname}: string
+    
+  All fluam output files will be prefixed by this string.
+
+\item \textbf{seed}: [N]
+
+  Seed for random number generation. If not present seed will be taken from system clock.
+  Maintining the same seed does not guarantee the reproducibility of the results as the parallel nature of fluam might prevent the operations from being always performed in the same order. 
+  
+\item \textbf{mass}: [X]
+
+  Excess mass of the particles (if applicable).
+
+\item \textbf{volumeParticle}: [X]
+
+  Volume of a particle (if applicable).
+
+
+\item \textbf{saveFluid}: 0,1
+  
+  If set to ``1'' fluid state will be saved to disk every \emph{savefreq} steps.
+
+\item \textbf{saveVTK}: 0,1
+
+  If set to ``1'' fluid state will be saved to disk every \emph{savefreq} steps in VTK format.
+  
+
+
+\item \textbf{bondedForces}: string
+  If present fluam will look for a file containing bonds between particles. If two particles are bonded they will experiment an harmonic spring force to each other. The format of the file must be:
+  \begin{lstlisting}
+    numberBonds
+    i j K r0
+    .
+    .
+    .
+  \end{lstlisting}  
+
+  Where \emph{i,j} are the indexes of the particles, \emph{K} is the spring constant and \emph{r0} is the equilibrium distance.
+  You must provide fluam with both the bond \emph{i,j} and the \emph{j,i} and the file must be sorted in the first two columns (that is it must be sorted in \emph{i} and in \emph{j} for bonds with the same \emph{i}).
+
+\item \textbf{threeBondedForces}: string
+  If present fluam will look for a file containing semiflexible bonds between particles. If three particles participate in a semiflexible bond in which particles will try to maintain a 180º angle. Additionally the three particles will experiment an harmonic spring between them. The format of the file must be:
+  \begin{lstlisting}
+    numberBonds
+    i j k K r0
+    .
+    .
+    .
+  \end{lstlisting}  
+  Where \emph{i,j,k} are the indexes of the particles, \emph{K} is the spring constant and \emph{r0} is the equilibrium distance.
+  Unlike with \emph{bondedForces} it is not needed to provide fluam with each bond only once, and the file is not required to be sorted in anyway. The only consideration is that \emph{j} should be the central particle of the semiflexible bond.
+  
+
+\end{multicols}
+\end{itemize}
+
+\subsection{Misterious, god-forbidden, options}
+I really do not know anything about these options that are valid data.main inputs.
+
+\begin{itemize}
+  \begin{multicols}{3}
+  \item identity\_prefactor
+  \item continuousGradient
+  \item gradTemperature
+  \item soretCoefficient
+  \item boundary
+  \item fileboundary
+  \item velocityboundary
+  \item volumeboundaryconst
+  \item bulkviscosity
+  \item thermostat
+  \item pressureparameters
+  \item savedensity
+  \item fluid
+  \item cutoff
+  \item dDensity
+  \item omega
+  \item waveSourceIndex
+  \item checkVelocity
+  \item bondedForcesVersion
+  \item computeNonBondedForces
+  \item viscosityMeasureAmplitude
+  \item viscosityMeasure
+  \item ghost
+  \item binaryMixture
+  \item massSpecies0
+  \item massSpecies1
+  \item fileConcentration
+  \item concentration
+  \item binaryMixtureWall
+  \item concentrationWall
+  \item vxWall
+  \item vyWall
+  \item vzWall
+  \item densityWall
+  \item nDrift
+  \item predictorCorrector
+  \item particlesWall
+  \item confinementZ
+  \item omega0
+  \end{multicols}
+\textbf{I suspect these are schemes:}
+
+\begin{multicols}{2}
+\item diffusion
+\item giantFluctuations
+\item incompressible
+\item incompressibleBoundaryRK2
+\item incompressibleBinaryMixture
+\item incompressibleBinaryMixtureMidPoint
+\item freeEnergyCompressibleParticles
+\item semiImplicitCompressibleParticles
+\item momentumCoupling
+\item extraMobility
+\end{multicols}
+\end{itemize}
+
+
+\section{Schemes} \label{sec:schemes}
+
+
+\subsection{stokesLimit}
+
+This scheme corresponds to the low Reynolds regime, solves the creeping-flow regime of the Navier-Stokes equations where inertia is neglected and immersed particles move according to the laws of Brownian Dynamics with Hydrodynamic interactions. Encodes the \emph{Fluctuating Immerse Boundary (FIB)} algorithm \cite{FIB,Staggered,IBM}.
+
+
+\subsubsection{Variants}
+\textbf{stokesLimit2D}, \textbf{stokesLimitFirstOrder}
+
+\subsubsection{Special data.main options}
+
+\begin{itemize}
+\item \textbf{bigSystem} There is a hard limit in fluam preventing a user from creating a simulation in which \emph{maxNumberPartInCell}·\emph{cells} is greater than $2^{27}$. This special flag overcomes this limitation.
+\end{itemize}
+
+\subsubsection{Ignored data.main options}
+
+\begin{itemize}
+\item \textbf{mass}
+\item \textbf{volumeParticle}
+\item \textbf{densfluid} 
+\end{itemize}
+
+\subsection{quasiNeutrallyBuoyant}
+
+Solves the incompressible Navier-Stokes equations in the inertial regime. Encodes the \emph{Inertial Coupling Method (ICM)} algorithm\cite{ICM,Staggered,IBM}. Furthemore it allows for particle to have an small excess mass with respect to the fluid and thus being capable of simulating buoyancy.
+
+\subsubsection{Variants}
+\begin{itemize}
+\item \textbf{quasiNeutrallyBuoyant2D} 2D version
+\item \textbf{quasiNeutrallyBuoyant4pt2D} 2D version using the 4pt Peskin kernels instead of the default 3pt.
+\end{itemize}
+
+\subsection{quasi2D}
+
+This scheme corresponds to the low Reynolds regime, solves the creeping-flow regime of the Navier-Stokes equations where inertia is neglected and immersed particles move according to the laws of Brownian Dynamics with Hydrodynamic interactions. There are several differences between this and \emph{stokesLimit}: First this scheme imposes a certain hydrodynamic tensor on the particles (the Rotne-Prager-Yamakawa tensor). Second in quasi2D while the particles are submerged in a 3D fluid they are strictly confined to the plane by an external rigid force in the \emph{z} direction (unlike \emph{stokesLimit2D} in which particles move in a purely 2D enviroment).
+
+The algorithm for quasi2D is described in \cite{q2D}.
+
+
+\subsubsection{Special data.main options}
+\begin{itemize}
+\item \textbf{saffmanCutOffWaveNumber}: [X]
+
+  If present the hydrodynamic tensor will be changed to the Saffman tensor and this value will be the cut-off wavenumber.
+  
+\item \textbf{saffmanLayerWidth}: [X]
+  
+  If \emph{saffmanCutOffWaveNumber} is present this option will control the saffman layer width of the Saffman hydrodynamic tensor.
+  
+\item \textbf{hydrodynamicRadius}
+
+  Hydrodynamic radius of the particles. In this scheme cells is an accuracy parameter unrelated to the size of the particles.
+\item \textbf{use\_RFD}
+
+  If present the divergence of the mobility term will be computed via Random Finite Differences instead of the analytic expression of the derivative of the hydrodynamic tensor, it is better to keep this option off.
+\end{itemize}
+
+
+
+\subsubsection{Ignored data.main options}
+
+\begin{itemize}
+\item \textbf{mass}
+\item \textbf{volumeParticle}
+\item \textbf{densfluid} 
+\end{itemize}
+
+\section{Hydrogrid}
+
+These options are related to HydroGrid
+
+\begin{itemize}
+\item \textbf{sampleHydroGrid}
+\item \textbf{cellsHydroGrid}
+\item \textbf{greenParticles}
+\end{itemize}
+  
+\bibliographystyle{plain}
+\bibliography{refs}
+
+
+\end{document}

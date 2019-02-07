@@ -1,0 +1,12 @@
+
+
+
+*.aux
+*.toc
+*.bbg
+*.bbl
+doc.out
+doc.out
+*~
+auto
+__region*tex
