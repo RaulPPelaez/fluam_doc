@@ -262,6 +262,23 @@ Here is a list of all available options with a comma separated list of possible 
   Unlike with \emph{bondedForces} it is not needed to provide fluam with each bond only once, and the file is not required to be sorted in anyway. The only consideration is that \emph{j} should be the central particle of the semiflexible bond.
   
 
+\item \textbf{LJparameters}: string
+  
+  If the option is present in the {\tt data.main} particles will interact with the specified nonbonded potential (by default Lennard Jones). If colors are present, one can specify the table of interactions in 
+  matrix form,  in the provided file (by default this file is ``LJ.in'')
+  \begin{lstlisting}
+    ntypes
+    A_{00} A_{01} ...
+    A_{10} A_{11} ...
+    ...
+    B_{00} B_{01} ...
+    B_{10} B_{11} ...
+    .
+    .
+    .
+  \end{lstlisting}  
+  Where $F_{ij}= A_{ij}/r^7 + B_{ij}/r^{13}$ is the force between the type $i$ and the type $j$. NOTE THAT TO CONSERVE MOMENTUM the matrix HAS TO BE SYMMETRIC.
+  The cutoff radius of this interaction is the one given in {\em cutoff}
 \end{multicols}
 \end{itemize}
 
